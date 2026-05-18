@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DISC Тестирование</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="screen-welcome" class="screen active">
+            <div class="welcome-icon">🧪</div>
+            <h1>DISC Тестирование</h1>
+            <p class="welcome-desc">
+                Узнайте свой поведенческий тип по методологии DISC.
+                Тест займёт около 5-7 минут.
+            </p>
+            <div class="disc-types">
+                <div class="type-badge d">D — Доминирование</div>
+                <div class="type-badge i">I — Влияние</div>
+                <div class="type-badge s">S — Постоянство</div>
+                <div class="type-badge c">C — Соответствие</div>
+            </div>
+            <button class="btn-primary" onclick="startTest()">Начать тест</button>
+        </div>
+
+        <div id="screen-test" class="screen">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="question-counter" id="question-counter">Вопрос 1 из 24</div>
+            <div class="question-block" id="question-block">
+                <p class="question-text" id="question-text"></p>
+                <div class="options" id="options"></div>
+            </div>
+        </div>
+
+        <div id="screen-result" class="screen">
+            <div class="result-icon">📊</div>
+            <h2>Тест завершён!</h2>
+            <div id="result-chart" class="result-chart"></div>
+            <p class="result-desc" id="result-desc"></p>
+            <div class="report-buttons">
+                <button class="btn-primary" onclick="sendSimpleReport()">📋 Простой отчёт</button>
+                <button class="btn-secondary" onclick="sendAIReport()">🤖 AI-отчёт</button>
+            </div>
+            <button class="btn-restart" onclick="restartTest()">🔄 Пройти заново</button>
+        </div>
+    </div>
+    <script src="questions.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
