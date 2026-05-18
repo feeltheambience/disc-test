@@ -9,8 +9,13 @@
 </head>
 <body>
     <div id="app">
+        <div class="corner-accent tl"></div>
+        <div class="corner-accent tr"></div>
+        <div class="corner-accent bl"></div>
+        <div class="corner-accent br"></div>
+
         <div id="screen-welcome" class="screen active">
-            <div class="welcome-icon">🧪</div>
+            <div class="disc-ring"><div class="disc-ring-inner">DISC</div></div>
             <h1>DISC Тестирование</h1>
             <p class="welcome-desc">
                 Узнайте свой поведенческий тип по методологии DISC.
@@ -37,7 +42,7 @@
         </div>
 
         <div id="screen-result" class="screen">
-            <div class="result-icon">📊</div>
+            <div class="disc-ring"><div class="disc-ring-inner">📊</div></div>
             <h2>Тест завершён!</h2>
             <div id="result-chart" class="result-chart"></div>
             <p class="result-desc" id="result-desc"></p>
