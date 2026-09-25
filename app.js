@@ -1,52 +1,98 @@
 const tg = window.Telegram?.WebApp;
-let currentQuestion = 0;
-let scores = { D: 0, I: 0, S: 0, C: 0 };
-let answerLog = [];
+
+const FACTORS = ["D", "I", "S", "C"];
+const FACTOR_NAMES = { D: "Доминирование", I: "Влияние", S: "Постоянство", C: "Соответствие" };
+const FACTOR_COLORS = { D: "#E53935", I: "#FFB300", S: "#43A047", C: "#1E88E5" };
+
+const WHEEL_ROLES = [
+    "ОРГАНИЗАТОР", "ВДОХНОВИТЕЛЬ", "ПРОМОУТЕР", "СВЯЗНОЙ",
+    "СОРАТНИК", "КООРДИНАТОР", "АНАЛИТИК", "ИСПОЛНИТЕЛЬ",
+];
+const WHEEL_PREFIX = {
+    "ОРГАНИЗАТОР": "ОРГАНИЗУЮЩИЙ", "ВДОХНОВИТЕЛЬ": "ВДОХНОВЛЯЮЩИЙ",
+    "ПРОМОУТЕР": "ПРОДВИГАЮЩИЙ", "СВЯЗНОЙ": "СВЯЗУЮЩИЙ",
+    "СОРАТНИК": "ПОДДЕРЖИВАЮЩИЙ", "КООРДИНАТОР": "КООРДИНИРУЮЩИЙ",
+    "АНАЛИТИК": "АНАЛИЗИРУЮЩИЙ", "ИСПОЛНИТЕЛЬ": "ИСПОЛНЯЮЩИЙ",
+};
+
+let groupIndex = 0;
+let step = "most";          // most → least
+let currentMost = null;
+let answers = [];           // [{ most: "D", least: "S" }]
+let shuffled = [];
 
 function init() {
     if (tg) {
         tg.ready();
         tg.expand();
-        document.body.style.backgroundColor = tg.themeParams?.bg_color || "#1a1a2e";
     }
-}
-
-function startTest() {
-    currentQuestion = 0;
-    scores = { D: 0, I: 0, S: 0, C: 0 };
-    answerLog = [];
-    showScreen("screen-test");
-    renderQuestion();
-}
-
-function restartTest() {
-    showScreen("screen-welcome");
+    renderWelcome();
 }
 
 function showScreen(id) {
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
     document.getElementById(id).classList.add("active");
+    window.scrollTo(0, 0);
 }
 
-function renderQuestion() {
-    const q = DISC_QUESTIONS[currentQuestion];
-    document.getElementById("question-counter").textContent =
-        `Вопрос ${currentQuestion + 1} из ${DISC_QUESTIONS.length}`;
-    document.getElementById("question-text").textContent = q.text;
+function renderWelcome() {
+    showScreen("screen-welcome");
+}
 
-    const fill = ((currentQuestion) / DISC_QUESTIONS.length) * 100;
-    document.getElementById("progress-fill").style.width = fill + "%";
+function startTest() {
+    groupIndex = 0;
+    step = "most";
+    currentMost = null;
+    answers = [];
+    showScreen("screen-test");
+    renderGroup();
+}
+
+function restartTest() {
+    renderWelcome();
+}
+
+function renderGroup() {
+    const group = DISC_GROUPS[groupIndex];
+    shuffled = [...group].sort(() => Math.random() - 0.5);
+
+    document.getElementById("question-counter").textContent =
+        `Группа ${groupIndex + 1} из ${DISC_GROUPS.length}`;
+    document.getElementById("progress-fill").style.width =
+        (groupIndex / DISC_GROUPS.length) * 100 + "%";
+
+    renderStep();
+}
+
+function renderStep() {
+    const promptEl = document.getElementById("step-prompt");
+    const hintEl = document.getElementById("step-hint");
+
+    if (step === "most") {
+        promptEl.textContent = "Что БОЛЬШЕ всего похоже на вас?";
+        promptEl.className = "step-prompt most";
+        hintEl.textContent = "Шаг 1 из 2 · выберите одну характеристику";
+    } else {
+        promptEl.textContent = "А что МЕНЬШЕ всего похоже?";
+        promptEl.className = "step-prompt least";
+        hintEl.textContent = "Шаг 2 из 2 · из оставшихся";
+    }
 
     const optionsDiv = document.getElementById("options");
     optionsDiv.innerHTML = "";
 
-    const shuffled = [...q.options].sort(() => Math.random() - 0.5);
-
     shuffled.forEach((opt) => {
         const btn = document.createElement("button");
         btn.className = "option-btn";
-        btn.textContent = opt.text;
-        btn.onclick = () => selectAnswer(opt.type, opt.text);
+        btn.textContent = opt.t;
+
+        if (step === "least" && opt.f === currentMost) {
+            btn.classList.add("picked-most");
+            btn.disabled = true;
+            btn.innerHTML = `${opt.t}<span class="tag">больше всего</span>`;
+        } else {
+            btn.onclick = () => selectOption(opt.f);
+        }
         optionsDiv.appendChild(btn);
     });
 
@@ -56,103 +102,146 @@ function renderQuestion() {
     block.classList.add("slide-in");
 }
 
-function selectAnswer(type, text) {
-    scores[type]++;
-    answerLog.push({ q: currentQuestion + 1, type, text });
+function selectOption(factor) {
+    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
 
-    document.querySelectorAll(".option-btn").forEach((b) => {
-        b.disabled = true;
-        if (b.textContent === text) b.classList.add("selected");
+    if (step === "most") {
+        currentMost = factor;
+        step = "least";
+        renderStep();
+        return;
+    }
+
+    answers.push({ most: currentMost, least: factor });
+    currentMost = null;
+    step = "most";
+    groupIndex++;
+
+    if (groupIndex < DISC_GROUPS.length) {
+        renderGroup();
+    } else {
+        document.getElementById("progress-fill").style.width = "100%";
+        showResults();
+    }
+}
+
+function goBack() {
+    if (step === "least") {
+        step = "most";
+        currentMost = null;
+        renderStep();
+    } else if (groupIndex > 0) {
+        groupIndex--;
+        answers.pop();
+        renderGroup();
+    }
+}
+
+// ─────────────────── расчёт профиля (зеркало серверного движка) ───────────────────
+
+function computeProfile() {
+    const most = { D: 0, I: 0, S: 0, C: 0 };
+    const least = { D: 0, I: 0, S: 0, C: 0 };
+    answers.forEach((a) => { most[a.most]++; least[a.least]++; });
+
+    const expected = answers.length / 4;
+    const scale = (count, inverse) => {
+        const delta = count - expected;
+        const raw = inverse ? 50 - delta * 7 : 50 + delta * 7;
+        return Math.round(Math.max(0, Math.min(100, raw)));
+    };
+
+    const adapted = {}, natural = {};
+    FACTORS.forEach((f) => {
+        adapted[f] = scale(most[f], false);
+        natural[f] = scale(least[f], true);
     });
+    return { natural, adapted };
+}
 
-    setTimeout(() => {
-        currentQuestion++;
-        if (currentQuestion < DISC_QUESTIONS.length) {
-            renderQuestion();
-        } else {
-            showResults();
-        }
-    }, 300);
+function wheelRole(scores) {
+    const pulls = {};
+    FACTORS.forEach((f) => { pulls[f] = Math.max(0, scores[f] - 50); });
+    if (FACTORS.every((f) => pulls[f] === 0)) {
+        const lowest = Math.min(...FACTORS.map((f) => scores[f]));
+        FACTORS.forEach((f) => { pulls[f] = scores[f] - lowest; });
+    }
+    const x = pulls.I - pulls.C;
+    const y = pulls.D - pulls.S;
+    let angle = (Math.atan2(x, y) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+
+    const sectorSize = 45;
+    const sectorIndex = Math.floor(((angle + sectorSize / 2) % 360) / sectorSize);
+    const mainRole = WHEEL_ROLES[sectorIndex];
+
+    const center = sectorIndex * sectorSize;
+    let offset = ((angle - center + 180) % 360) - 180;
+    const neighbour = WHEEL_ROLES[(sectorIndex + (offset > 0 ? 1 : -1) + 8) % 8];
+
+    const name = Math.abs(offset) < sectorSize * 0.25
+        ? mainRole
+        : `${WHEEL_PREFIX[neighbour]} ${mainRole}`;
+
+    return { name, position: Math.floor((angle / 360) * 60) + 1 };
+}
+
+function renderGraph(containerId, scores, title, subtitle) {
+    const box = document.getElementById(containerId);
+    box.innerHTML = `
+        <div class="graph-title">${title}</div>
+        <div class="graph-sub">${subtitle}</div>
+        <div class="graph-bars">
+            ${FACTORS.map((f) => `
+                <div class="graph-col">
+                    <div class="graph-value" style="color:${FACTOR_COLORS[f]}">${scores[f]}</div>
+                    <div class="graph-track">
+                        <div class="graph-fill" data-h="${scores[f]}"
+                             style="height:0%;background:${FACTOR_COLORS[f]}"></div>
+                    </div>
+                    <div class="graph-label" style="color:${FACTOR_COLORS[f]}">${f}</div>
+                </div>`).join("")}
+            <div class="energy-line"></div>
+        </div>`;
 }
 
 function showResults() {
-    document.getElementById("progress-fill").style.width = "100%";
+    const { natural, adapted } = computeProfile();
+    const role = wheelRole(natural);
 
-    const total = scores.D + scores.I + scores.S + scores.C || 1;
-    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-    const primary = sorted[0][0];
+    renderGraph("graph-natural", natural, "График II · Естественный стиль",
+        "как вы действуете без подстройки");
+    renderGraph("graph-adapted", adapted, "График I · Адаптированный стиль",
+        "как считаете нужным вести себя сейчас");
 
-    const names = {
-        D: "Доминирование",
-        I: "Влияние",
-        S: "Постоянство",
-        C: "Соответствие",
-    };
-    const colors = { D: "#e74c3c", I: "#f1c40f", S: "#2ecc71", C: "#3498db" };
-    const emojis = { D: "🔴", I: "🟡", S: "🟢", C: "🔵" };
+    const gap = FACTORS.reduce((sum, f) => sum + Math.abs(adapted[f] - natural[f]), 0);
+    const gapText = gap <= 20 ? "низкая" : gap <= 45 ? "умеренная" : "высокая";
 
-    const chartDiv = document.getElementById("result-chart");
-    chartDiv.innerHTML = "";
-
-    sorted.forEach(([type, score]) => {
-        const pct = Math.round((score / total) * 100);
-        const row = document.createElement("div");
-        row.className = "chart-row";
-        row.innerHTML = `
-            <div class="chart-label">${emojis[type]} ${type}</div>
-            <div class="chart-bar-container">
-                <div class="chart-bar" style="width: 0%; background: ${colors[type]}" data-width="${pct}"></div>
-            </div>
-            <div class="chart-pct">${pct}%</div>
-        `;
-        chartDiv.appendChild(row);
-    });
-
-    document.getElementById("result-desc").textContent =
-        `Ваш основной тип: ${emojis[primary]} ${names[primary]}`;
+    document.getElementById("role-name").textContent = role.name;
+    document.getElementById("role-meta").textContent =
+        `позиция ${role.position} на ролевом колесе · адаптация ${gapText}`;
 
     showScreen("screen-result");
 
     setTimeout(() => {
-        document.querySelectorAll(".chart-bar").forEach((bar) => {
-            bar.style.width = bar.dataset.width + "%";
+        document.querySelectorAll(".graph-fill").forEach((el) => {
+            el.style.height = el.dataset.h + "%";
         });
-    }, 100);
+    }, 120);
 }
 
-function buildSummary() {
-    const typeCounts = {};
-    answerLog.forEach((a) => {
-        typeCounts[a.type] = (typeCounts[a.type] || 0) + 1;
-    });
-    return Object.entries(typeCounts)
-        .map(([t, c]) => `${t}:${c}`)
-        .join(",");
+// ─────────────────────────── отправка в бот ───────────────────────────
+
+function packAnswers() {
+    return answers.map((a) => a.most + a.least).join("");
 }
 
-function sendSimpleReport() {
-    const data = JSON.stringify({
-        scores,
-        summary: buildSummary(),
-        report_type: "simple",
-    });
+function sendReport(type) {
+    const payload = JSON.stringify({ v: 2, answers: packAnswers(), type });
     if (tg) {
-        tg.sendData(data);
+        tg.sendData(payload);
     } else {
-        alert("Простой отчёт:\n" + data);
-    }
-}
-
-function sendAIReport() {
-    const data = JSON.stringify({
-        scores,
-        summary: buildSummary(),
-        report_type: "ai",
-    });
-    if (tg) {
-        tg.sendData(data);
-    } else {
-        alert("AI отчёт:\n" + data);
+        alert("Вне Telegram отправка недоступна.\n\n" + payload);
     }
 }
 
