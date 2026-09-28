@@ -232,17 +232,68 @@ function showResults() {
 
 // ─────────────────────────── отправка в бот ───────────────────────────
 
+const API_URL = "https://demofolio.ru/disc-api/submit";
+
 function packAnswers() {
     return answers.map((a) => a.most + a.least).join("");
 }
 
-function sendReport(type) {
-    const payload = JSON.stringify({ v: 2, answers: packAnswers(), type });
-    if (tg) {
-        tg.sendData(payload);
-    } else {
-        alert("Вне Telegram отправка недоступна.\n\n" + payload);
+function setButtonsBusy(busy, message) {
+    document.querySelectorAll(".report-buttons button").forEach((b) => { b.disabled = busy; });
+    const intro = document.getElementById("send-status");
+    if (intro) intro.textContent = message || "";
+}
+
+// sendData() работает только если Mini App открыт кнопкой reply-клавиатуры.
+// При запуске из кнопки меню он молча не срабатывает — поэтому сначала шлём
+// результаты на API (там подпись initData проверяется), а sendData оставляем запасным.
+async function sendReport(type) {
+    const answersPacked = packAnswers();
+
+    if (!tg) {
+        alert("Вне Telegram отправка недоступна.\n\n" + answersPacked);
+        return;
     }
+
+    setButtonsBusy(true, "Отправляю результаты…");
+
+    if (tg.initData) {
+        try {
+            const resp = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ initData: tg.initData, answers: answersPacked, type }),
+            });
+            if (resp.ok) {
+                setButtonsBusy(false, "");
+                showSent();
+                return;
+            }
+            console.warn("API ответил", resp.status);
+        } catch (err) {
+            console.warn("API недоступен:", err);
+        }
+    }
+
+    setButtonsBusy(false, "");
+    tg.sendData(JSON.stringify({ v: 2, answers: answersPacked, type }));
+}
+
+function showSent() {
+    const box = document.getElementById("screen-result");
+    const sent = document.createElement("div");
+    sent.className = "sent-note";
+    sent.innerHTML = `
+        <div class="sent-icon">✓</div>
+        <div class="sent-title">Отчёт отправлен в чат</div>
+        <div class="sent-text">Закройте это окно — отчёт и PDF придут сообщением от бота.</div>
+        <button class="btn-primary" onclick="tg.close()">Закрыть и посмотреть отчёт</button>`;
+    box.querySelector(".report-buttons").replaceWith(sent);
+    const restart = box.querySelector(".btn-restart");
+    if (restart) restart.remove();
+    const intro = document.querySelector(".report-intro");
+    if (intro) intro.remove();
+    window.scrollTo(0, document.body.scrollHeight);
 }
 
 init();

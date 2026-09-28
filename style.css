@@ -463,3 +463,47 @@ h2 {
 .corner-accent.tr { top: -60px; right: -60px; background: var(--disc-i); }
 .corner-accent.bl { bottom: -60px; left: -60px; background: var(--disc-s); }
 .corner-accent.br { bottom: -60px; right: -60px; background: var(--disc-c); }
+
+.send-status {
+    text-align: center;
+    font-size: 13px;
+    color: var(--disc-i);
+    margin-bottom: 8px;
+    min-height: 16px;
+}
+
+.sent-note {
+    background: var(--bg-card);
+    border: 1px solid rgba(67, 160, 71, 0.5);
+    border-radius: 18px;
+    padding: 22px 18px;
+    text-align: center;
+}
+
+.sent-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    background: rgba(67, 160, 71, 0.18);
+    border: 2px solid var(--disc-s);
+    color: #81c784;
+    font-size: 26px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sent-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.sent-text {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
