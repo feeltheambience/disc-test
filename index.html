@@ -39,6 +39,12 @@
                 <div class="info-row"><b>Время.</b> 6–8 минут.</div>
             </div>
 
+            <div class="name-field">
+                <label for="user-name">Ваше имя <span>— попадёт в отчёт и PDF</span></label>
+                <input type="text" id="user-name" maxlength="60" placeholder="Например: Вероника"
+                       autocomplete="name">
+            </div>
+
             <button class="btn-primary" onclick="startTest()">Начать тест</button>
         </div>
 
@@ -71,7 +77,7 @@
             <div class="graph-box" id="graph-natural"></div>
             <div class="graph-box" id="graph-adapted"></div>
 
-            <p class="report-intro">Выберите формат отчёта — он придёт в чат вместе с PDF:</p>
+            <p class="report-intro"><span class="only-tg">Выберите формат отчёта — он придёт в чат вместе с PDF:</span><span class="only-web">Выберите формат отчёта — он откроется на этой странице, PDF можно скачать:</span></p>
             <p class="send-status" id="send-status"></p>
 
             <div class="report-buttons">
@@ -87,6 +93,9 @@
 
             <button class="btn-restart" onclick="restartTest()">🔄 Пройти заново</button>
         </div>
+
+        <!-- Экран 4 — отчёт в браузере (веб-версия) -->
+        <div id="screen-report" class="screen"></div>
     </div>
 
     <script src="questions.js"></script>

@@ -15,6 +15,9 @@ const WHEEL_PREFIX = {
     "АНАЛИТИК": "АНАЛИЗИРУЮЩИЙ", "ИСПОЛНИТЕЛЬ": "ИСПОЛНЯЮЩИЙ",
 };
 
+// В Telegram отчёт уходит в чат, по обычной ссылке — показывается прямо на странице.
+const IS_TELEGRAM = Boolean(tg && tg.initData);
+
 let groupIndex = 0;
 let step = "most";          // most → least
 let currentMost = null;
@@ -26,6 +29,7 @@ function init() {
         tg.ready();
         tg.expand();
     }
+    document.body.classList.add(IS_TELEGRAM ? "mode-telegram" : "mode-web");
     renderWelcome();
 }
 
@@ -250,8 +254,8 @@ function setButtonsBusy(busy, message) {
 async function sendReport(type) {
     const answersPacked = packAnswers();
 
-    if (!tg) {
-        alert("Вне Telegram отправка недоступна.\n\n" + answersPacked);
+    if (!IS_TELEGRAM) {
+        await showWebReport(type, answersPacked);
         return;
     }
 
@@ -284,17 +288,18 @@ async function sendReport(type) {
     }, 3000);
 }
 
-function showSendFailed() {
-    if (document.getElementById("send-failed")) return;
+function showSendFailed(message) {
+    document.getElementById("send-failed")?.remove();
     const box = document.querySelector(".report-buttons");
     if (!box) return;
     const note = document.createElement("div");
     note.id = "send-failed";
     note.className = "fail-note";
-    note.innerHTML = `
-        <b>Не удалось отправить отчёт</b>
-        Закройте это окно, отправьте боту /start и откройте тест
-        кнопкой «🧪 Пройти DISC-тест» внизу экрана — тогда результаты дойдут.`;
+    note.innerHTML = message
+        ? `<b>Не получилось</b>${esc(message)}`
+        : `<b>Не удалось отправить отчёт</b>
+           Закройте это окно, отправьте боту /start и откройте тест
+           кнопкой «🧪 Пройти DISC-тест» внизу экрана — тогда результаты дойдут.`;
     box.after(note);
     note.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -317,3 +322,172 @@ function showSent() {
 }
 
 init();
+
+// ─────────────────── Веб-версия: отчёт прямо на странице ───────────────────
+
+const REPORT_URL = "https://demofolio.ru/disc-api/report";
+const PDF_URL = "https://demofolio.ru/disc-api/pdf/";
+
+function esc(text) {
+    const div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+}
+
+function list(items) {
+    return `<ul class="rep-list">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
+}
+
+async function showWebReport(type, answersPacked) {
+    const name = (document.getElementById("user-name")?.value || "").trim();
+    setButtonsBusy(true, type === "ai"
+        ? "Считаю профиль, ИИ готовит разбор — 20–40 секунд…"
+        : "Собираю отчёт…");
+
+    let payload;
+    try {
+        const resp = await fetch(REPORT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: answersPacked, type, name }),
+        });
+        payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || resp.status);
+    } catch (err) {
+        console.error(err);
+        setButtonsBusy(false, "");
+        showSendFailed("Сервер отчётов недоступен. Попробуйте ещё раз через минуту.");
+        return;
+    }
+
+    setButtonsBusy(false, "");
+    renderReport(payload.report);
+}
+
+function renderReport(r) {
+    const host = document.getElementById("screen-report");
+    const per = r.perception;
+
+    const sections = [];
+
+    sections.push(`
+        <div class="rep-head">
+            <div class="rep-role-label">Ведущая роль</div>
+            <div class="rep-role">${esc(r.wheel_natural.name)}</div>
+            <div class="rep-role-desc">${esc(r.wheel_natural.description)}</div>
+            <div class="rep-codes">SIN ${esc(r.sin)} · SIA ${esc(r.sia)}</div>
+        </div>`);
+
+    sections.push(`<div class="rep-graphs">
+        <div class="graph-box" id="rep-graph-nat"></div>
+        <div class="graph-box" id="rep-graph-ad"></div>
+    </div>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Общая характеристика</h3>
+        <p>${r.general.map(esc).join(" ")}</p></section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Ценность для организации</h3>${list(r.value)}</section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Как общаться</h3>
+        <h4 class="do">Что помогает</h4>${list(r.comm_do)}
+        <h4 class="dont">Что вредит</h4>${list(r.comm_dont)}</section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Восприятие поведения</h3>
+        <div class="rep-row"><b>Воспринимает себя как</b><span>${esc(per.self.join(", "))}</span></div>
+        <div class="rep-row"><b>При умеренном давлении</b><span>${esc(per.moderate.join(", "))}</span></div>
+        <div class="rep-row"><b>При сильном стрессе</b><span>${esc(per.extreme.join(", "))}</span></div>
+        </section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Естественный и адаптированный стили</h3>
+        <p class="rep-note">Уровень адаптации: <b>${esc(r.adaptation.verdict)}</b>
+           (${r.adaptation.total} пунктов). ${esc(r.adaptation.comment)}</p>
+        ${r.areas.map((a) => `
+            <div class="rep-area">
+                <div class="rep-area-title">${esc(a.title)}
+                    <span>${a.natural_score} → ${a.adapted_score}</span></div>
+                <p><b>Естественный.</b> ${esc(a.natural)}</p>
+                <p><b>Адаптированный.</b> ${esc(a.adapted)}</p>
+            </div>`).join("")}
+        </section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Ранжирование поведенческих характеристик</h3>
+        ${r.behaviors.map((b, i) => `
+            <div class="beh-row">
+                <div class="beh-title">${i + 1}. ${esc(b.title)}</div>
+                <div class="beh-bars">
+                    <div class="beh-track"><div class="beh-fill nat" style="width:${b.natural}%"></div></div>
+                    <div class="beh-track"><div class="beh-fill ad" style="width:${b.adapted}%"></div></div>
+                </div>
+                <div class="beh-nums"><span>${b.natural}</span><span>${b.adapted}</span></div>
+            </div>`).join("")}
+        <div class="rep-legend"><i class="nat"></i> естественный <i class="ad"></i> адаптированный</div>
+        </section>`);
+
+    if (r.time_wasters.length) {
+        sections.push(`<section class="rep-block">
+            <h3>Пожиратели времени</h3>
+            ${r.time_wasters.map((t) => `
+                <div class="rep-area">
+                    <div class="rep-area-title">${esc(t.title)}</div>
+                    <p><b>Причины</b></p>${list(t.causes)}
+                    <p><b>Решения</b></p>${list(t.fixes)}
+                </div>`).join("")}
+            </section>`);
+    }
+
+    sections.push(`<section class="rep-block">
+        <h3>Области совершенствования</h3>${list(r.improvements)}</section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Идеальная рабочая обстановка</h3>${list(r.ideal_env)}</section>`);
+
+    sections.push(`<section class="rep-block">
+        <h3>Принципы управления</h3>${list(r.management)}</section>`);
+
+    if (r.ai_text) {
+        const paragraphs = r.ai_text.split("\n").filter((x) => x.trim());
+        sections.push(`<section class="rep-block rep-ai">
+            <h3>Индивидуальная интерпретация</h3>
+            ${paragraphs.map((p) => {
+                const isHeading = p === p.toUpperCase() && p.length < 60;
+                return isHeading ? `<h4>${esc(p)}</h4>` : `<p>${esc(p)}</p>`;
+            }).join("")}
+            </section>`);
+    } else if (r.ai_limited) {
+        sections.push(`<section class="rep-block rep-warn">
+            Лимит ИИ-разборов исчерпан — показан базовый отчёт. Попробуйте позже.
+            </section>`);
+    }
+
+    host.innerHTML = `
+        <div class="rep-top">
+            <div class="rep-name">${esc(r.name)}</div>
+            <div class="rep-sub">Отчёт DISC · ${new Date().toLocaleDateString("ru-RU")}</div>
+        </div>
+        ${sections.join("")}
+        <a class="btn-primary" id="pdf-link" href="${PDF_URL}${encodeURIComponent(r.id)}">
+            📄 Скачать PDF-отчёт</a>
+        <button class="btn-restart" onclick="restartAll()">🔄 Пройти тест заново</button>`;
+
+    showScreen("screen-report");
+    renderGraph("rep-graph-nat", r.natural, "График II · Естественный стиль",
+        "базовое поведение без подстройки");
+    renderGraph("rep-graph-ad", r.adapted, "График I · Адаптированный стиль",
+        "как ведёт себя в текущей среде");
+    setTimeout(() => {
+        document.querySelectorAll("#screen-report .graph-fill").forEach((el) => {
+            el.style.height = el.dataset.h + "%";
+        });
+    }, 100);
+}
+
+function restartAll() {
+    document.getElementById("screen-report").innerHTML = "";
+    renderWelcome();
+}
