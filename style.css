@@ -507,3 +507,21 @@ h2 {
     color: var(--text-secondary);
     margin-bottom: 16px;
 }
+
+.fail-note {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(229, 57, 53, 0.12);
+    border: 1px solid rgba(229, 57, 53, 0.5);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #ffcdd2;
+}
+
+.fail-note b {
+    display: block;
+    color: #ff8a80;
+    font-size: 15px;
+    margin-bottom: 6px;
+}

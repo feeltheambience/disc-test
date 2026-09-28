@@ -275,8 +275,28 @@ async function sendReport(type) {
         }
     }
 
-    setButtonsBusy(false, "");
+    // Запасной путь. При успехе Telegram сам закрывает окно; если через 3 секунды
+    // мы всё ещё открыты — значит sendData не сработал (запуск не с reply-клавиатуры).
     tg.sendData(JSON.stringify({ v: 2, answers: answersPacked, type }));
+    setTimeout(() => {
+        setButtonsBusy(false, "");
+        showSendFailed();
+    }, 3000);
+}
+
+function showSendFailed() {
+    if (document.getElementById("send-failed")) return;
+    const box = document.querySelector(".report-buttons");
+    if (!box) return;
+    const note = document.createElement("div");
+    note.id = "send-failed";
+    note.className = "fail-note";
+    note.innerHTML = `
+        <b>Не удалось отправить отчёт</b>
+        Закройте это окно, отправьте боту /start и откройте тест
+        кнопкой «🧪 Пройти DISC-тест» внизу экрана — тогда результаты дойдут.`;
+    box.after(note);
+    note.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function showSent() {
