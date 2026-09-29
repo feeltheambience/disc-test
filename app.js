@@ -91,9 +91,12 @@ function renderStep() {
         btn.textContent = opt.t;
 
         if (step === "least" && opt.f === currentMost) {
+            // Одно слово не может быть сразу самым похожим и самым непохожим,
+            // поэтому выбрать его второй раз нельзя. Но нажатие отменяет выбор —
+            // иначе исправить промах можно только кнопкой «Назад».
             btn.classList.add("picked-most");
-            btn.disabled = true;
-            btn.innerHTML = `${opt.t}<span class="tag">больше всего</span>`;
+            btn.innerHTML = `${opt.t}<span class="tag">больше всего · изменить</span>`;
+            btn.onclick = () => undoMost();
         } else {
             btn.onclick = () => selectOption(opt.f);
         }
@@ -104,6 +107,13 @@ function renderStep() {
     block.classList.remove("slide-in");
     void block.offsetWidth;
     block.classList.add("slide-in");
+}
+
+function undoMost() {
+    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    step = "most";
+    currentMost = null;
+    renderStep();
 }
 
 function selectOption(factor) {
